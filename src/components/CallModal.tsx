@@ -84,6 +84,10 @@ function CallModal() {
         })
     }
 
+    const handleDecline = () => {
+        setMessage("");
+    }
+
     return (
         <div className="bg-[#cecece] flex items-center flex-col pt-6 w-[400px] h-[500px] mt-10 relative left-1/2 -translate-x-1/2 rounded">
             
@@ -126,7 +130,7 @@ function CallModal() {
                                 <p>Accept</p>
                             </div>
 
-                            <div className="flex flex-col bg-red-500 rounded-2xl py-2 w-20 items-center cursor-pointer">
+                            <div onClick={handleDecline} className="flex flex-col bg-red-500 rounded-2xl py-2 w-20 items-center cursor-pointer">
                                 <MdOutlineCallEnd />
                                 <p>Decline</p>
                             </div>
