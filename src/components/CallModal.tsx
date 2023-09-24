@@ -1,13 +1,14 @@
 import { useEffect, useState, useRef } from "react";
 import { MdWifiCalling2, MdCall, MdOutlineCallEnd } from 'react-icons/md';
 import { AiOutlineCopy } from "react-icons/ai";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/ReactToastify.css";
+import { toast } from "react-hot-toast";
 import { MediaConnection } from "peerjs";
 
 import usePeer from '../hooks/usePeer';
+import { setInterface, setNameToShow } from "../redux/slice/Interface";
+import { useDispatch } from "react-redux";
 
-function CallModal() {
+function CallModal({ show }: { show: boolean }) {
 
     const [myId, setMyId] = useState("");
     const [name, setName] = useState("");
@@ -15,10 +16,24 @@ function CallModal() {
     const [message, setMessage] = useState("");
     const [call, setCall] = useState<MediaConnection>(null!);
     const [stream, setStream] = useState<MediaStream>(null!);
+    const [calling, setCalling] = useState(false);
 
     const userAudio = useRef<HTMLAudioElement>(null!);
 
+    const dispatch = useDispatch();
+
     const peer = usePeer();
+
+    useEffect(() => {
+        peer.on("connection", (conn) => {
+            conn.on("data", data => {
+                if ((data as string).startsWith("Hello")) {
+                    dispatch(setInterface("call"));
+                }
+            })
+        });
+    }, [peer]);
+    
 
     useEffect(() => {
         peer.on("open", id => {
@@ -30,6 +45,8 @@ function CallModal() {
             console.log("Connected")
             conn.on("data", data => {
                 setMessage(data as string);
+                const nameToShow = (data as string).split(" ")[0];
+                dispatch(setNameToShow(nameToShow));
             })
         });
 
@@ -49,14 +66,27 @@ function CallModal() {
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(myId);
-        toast("Copied!", {
-            position: "top-left",
-            autoClose: 2000
+        if (!myId) {
+            toast.loading("Loading, Try again...", {
+                position: "top-right",
+                duration: 1000
+            });
+            return;
+        }
+        toast.success("Copied!", {
+            position: "top-right",
         });
     }
 
     const handleCall = () => {
-        if (!userId) return;
+        if (!userId) {
+            toast.error("Id to call cannot be empty", {
+                position: "top-right"
+            });
+            return;
+        }
+
+        setCalling(true);
         
         const conn = peer.connect(userId);
         conn.on("open", () => {
@@ -75,13 +105,20 @@ function CallModal() {
 
     const handleAccept = () => {
         call.answer(stream);
-
+        
         call.on("stream", myStream => {
             userAudio.current.srcObject = myStream;
             userAudio.current.onloadeddata = () => {
                 userAudio.current.play();
+                dispatch(setInterface("call"));
             }
-        })
+        });
+
+        const conn = peer.connect(call.peer);
+
+        conn.on('open', () => {
+            conn.send('Hello');
+        });
     }
 
     const handleDecline = () => {
@@ -89,24 +126,19 @@ function CallModal() {
     }
 
     return (
-        <div className="bg-[#cecece] flex items-center flex-col pt-6 w-[400px] h-[500px] mt-10 relative left-1/2 -translate-x-1/2 rounded">
+        <div className={`bg-[#cecece] ${show ? "flex" : "hidden"} items-center flex-col pt-6 w-[400px] h-[500px] mt-10 relative left-1/2 -translate-x-1/2 rounded`}>
             
-            <div className="bg-primary rounded-tl-md rounded-tr-md shadow-lg px-2 py-1 w-36">
+            <div className="bg-primary rounded-tl-md rounded-tr-md shadow-lg px-2 py-1 w-52">
                 <p className="font-bold">Name</p>
                 <input value={name} onChange={e => setName(e.target.value)} type="text" className="bg-transparent w-full outline-none" />
             </div>
-
-            <ToastContainer
-                position="top-left"
-                autoClose={2000}
-             />
 
             <button onClick={handleCopy} className="flex items-center gap-2 mt-10 bg-primary px-3 py-2 rounded-md drop-shadow-2xl">
                 <AiOutlineCopy />
                 Copy ID
             </button>
 
-            <div className="bg-primary rounded-tl-md rounded-tr-md shadow-lg px-2 py-1 w-36 mt-10">
+            <div className="bg-primary rounded-tl-md rounded-tr-md shadow-lg px-2 py-1 w-352 mt-10">
                 <p className="font-bold">ID to call</p>
                 <input value={userId} onChange={e => setUserId(e.target.value)} type="text" className="bg-transparent w-full outline-none" />
             </div>
@@ -114,9 +146,15 @@ function CallModal() {
 
             <audio hidden ref={userAudio}></audio>
 
-            <button onClick={handleCall} className='mt-10'>
-                <MdWifiCalling2 color="#4776e6" size={30} />
+            <button onClick={handleCall} className='mt-16'>
+                <MdWifiCalling2 color="#4776e6" size={40} />
             </button>
+
+            {
+                calling && (
+                    <p className="text-primary mt-2">Calling....</p>
+                )
+            }
 
             {
                 message && (
